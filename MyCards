@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyCards</title>
+    <style>
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #ffffff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: #fff; margin: 0; padding: 20px; -webkit-tap-highlight-color: transparent; }
+        
+        /* Landing */
+        .page { display: none; min-height: 100vh; flex-direction: column; align-items: center; }
+        .page.active { display: flex; }
+        
+        /* Logo */
+        .logo-box { width: 80px; height: 80px; border: 2px solid white; border-radius: 20px; display: flex; justify-content: center; align-items: center; margin-top: 150px; transform: rotate(-10deg); }
+        .logo-inner { width: 40px; height: 40px; border: 2px solid white; border-radius: 10px; }
+        
+        /* Wallet UI */
+        .header { font-size: 16px; font-weight: 600; letter-spacing: 2px; color: #888; margin-top: 20px; margin-bottom: 40px; text-align: center; width: 100%; }
+        .card-list { width: 100%; max-width: 500px; padding-bottom: 100px; }
+        
+        .card { background: var(--panel); border-radius: 20px; padding: 16px; display: flex; align-items: center; margin-bottom: 12px; border: 1px solid #2a2a2a; cursor: pointer; }
+        .card-img { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; margin-right: 15px; background: #333; }
+        
+        /* FAB (+) */
+        .fab { position: fixed; background: white; color: black; display: flex; justify-content: center; align-items: center; cursor: pointer; border: none; box-shadow: 0 10px 20px rgba(0,0,0,0.3); transition: all 0.3s ease; z-index: 5; }
+        .fab-center { position: relative; margin-top: 50px; width: 80px; height: 80px; border-radius: 40px; font-size: 40px; }
+        .fab-bottom { bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 30px; font-size: 30px; }
+
+        /* Modali */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 10; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        .btn-action { width: 100%; padding: 15px; border-radius: 16px; background: var(--panel); border: 1px solid #333; color: white; margin-top: 10px; cursor: pointer; font-size: 16px; }
+        .input-text { width: 100%; padding: 15px; margin-bottom: 10px; background: var(--panel); border: 1px solid #333; color: white; border-radius: 12px; box-sizing: border-box; font-size: 16px; }
+        
+        .photo-thumb { width: 100%; height: 120px; object-fit: cover; border-radius: 12px; margin-top: 10px; display: none; background: #222; }
+        .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        
+        #reader-container { display: none; margin: 10px 0; background: #000; border-radius: 12px; overflow: hidden; }
+        #reader { width: 100%; }
+        
+        /* Barcode container */
+        .barcode-box { background: white; padding: 20px; border-radius: 20px; text-align: center; margin: 20px 0; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+
+    <!-- LANDING PAGE -->
+    <div id="landing-page" class="page active">
+        <div class="logo-box"><div class="logo-inner"></div></div>
+        <h1 style="font-weight: 200; font-size: 32px; margin-top: 30px;">MyCards</h1>
+        <button style="margin-top: 50px; background: transparent; border: 1px solid #555; color: white; padding: 12px 40px; border-radius: 25px; font-size: 16px; cursor: pointer;" onclick="goWallet()">ENTRA</button>
+    </div>
+
+    <!-- WALLET PAGE -->
+    <div id="wallet-page" class="page">
+        <div class="header">MY CARDS</div>
+        <div id="card-list" class="card-list"></div>
+        <button id="add-fab" class="fab" onclick="openAddModal()">+</button>
+    </div>
+
+    <!-- MODALE AGGIUNGI CARTA -->
+    <div id="add-modal" class="modal">
+        <button class="btn-action" onclick="closeAddModal()" style="background: transparent; border: none; text-align: right; margin-bottom: 20px; color: #888;">Chiudi ✕</button>
+        <h2 style="margin-top:0;">Nuova Carta</h2>
+        
+        <input type="text" id="in-name" class="input-text" placeholder="Nome (es. Esselunga)">
+        <input type="text" id="in-num" class="input-text" placeholder="Codice Carta">
+        
+        <button class="btn-action" onclick="startScan()">📷 Scannerizza Codice a Barre</button>
+        <div id="reader-container">
+            <div id="reader"></div>
+            <button class="btn-action" onclick="stopScan()" style="background: #ff3b30; border:none;">Annulla Scanner</button>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button class="btn-action" onclick="document.getElementById('file-front').click()">📸 Scatta Fronte (Icona)</button>
+            <input type="file" id="file-front" hidden accept="image/*" capture="environment" onchange="previewAndCompress(this, 'prev-f')">
+            <img id="prev-f" class="photo-thumb">
+        </div>
+
+        <div style="margin-top: 10px;">
+            <button class="btn-action" onclick="document.getElementById('file-back').click()">📸 Scatta Retro (Backup)</button>
+            <input type="file" id="file-back" hidden accept="image/*" capture="environment" onchange="previewAndCompress(this, 'prev-b')">
+            <img id="prev-b" class="photo-thumb">
+        </div>
+
+        <button class="btn-action" style="background:white; color:black; font-weight:bold; margin-top: 30px;" onclick="saveCard()">Salva Carta</button>
+    </div>
+
+    <!-- MODALE DETTAGLIO CARTA -->
+    <div id="detail-modal" class="modal">
+        <button class="btn-action" onclick="document.getElementById('detail-modal').style.display='none'" style="background: transparent; border: none; text-align: right; color: #888;">Chiudi ✕</button>
+        
+        <h2 id="d-name" style="text-align: center; margin-top: 0;"></h2>
+        
+        <div class="barcode-box">
+            <svg id="d-barcode" style="max-width: 100%;"></svg>
+        </div>
+
+        <div class="photo-grid">
+            <div>
+                <p style="color:#888; font-size:14px; margin-bottom:5px;">Fronte</p>
+                <img id="d-front" style="width:100%; border-radius:12px; background:#222;">
+            </div>
+            <div>
+                <p style="color:#888; font-size:14px; margin-bottom:5px;">Retro</p>
+                <img id="d-back" style="width:100%; border-radius:12px; background:#222; display:none;">
+            </div>
+        </div>
+
+        <button class="btn-action" style="background: #ff3b30; border: none; margin-top: 40px;" onclick="deleteCard()">Elimina Carta</button>
+    </div>
+
+    <script>
+        let cards = JSON.parse(localStorage.getItem('myCardsData')) || [];
+        let html5QrCode = null;
+        let currentCardIndex = -1;
+
+        // Navigazione e Rendering UI (Invariati)
+        function goWallet() {
+            document.getElementById('landing-page').classList.remove('active');
+            document.getElementById('wallet-page').classList.add('active');
+            updateUI();
+        }
+
+        function updateUI() {
+            const list = document.getElementById('card-list');
+            const fab = document.getElementById('add-fab');
+            list.innerHTML = '';
+            
+            if(cards.length === 0) {
+                fab.className = 'fab fab-center';
+                list.innerHTML = '<p style="text-align:center; color:#555; margin-top:40px;">Nessuna carta presente.</p>';
+            } else {
+                fab.className = 'fab fab-bottom';
+                cards.forEach((c, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'card';
+                    const imgSrc = c.front || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=333&color=fff`;
+                    div.innerHTML = `<img src="${imgSrc}" class="card-img"><div style="font-weight:600; font-size:18px;">${c.name}</div>`;
+                    div.onclick = () => showDetail(i);
+                    list.appendChild(div);
+                });
+            }
+        }
+
+        function openAddModal() {
+            document.getElementById('in-name').value = '';
+            document.getElementById('in-num').value = '';
+            document.getElementById('file-front').value = '';
+            document.getElementById('file-back').value = '';
+            
+            const pF = document.getElementById('prev-f');
+            const pB = document.getElementById('prev-b');
+            pF.src = ''; pF.style.display = 'none';
+            pB.src = ''; pB.style.display = 'none';
+            
+            document.getElementById('add-modal').style.display = 'block';
+        }
+
+        function closeAddModal() {
+            stopScan();
+            document.getElementById('add-modal').style.display = 'none';
+        }
+
+        function showDetail(index) {
+            currentCardIndex = index;
+            const c = cards[index];
+            document.getElementById('d-name').innerText = c.name;
+            document.getElementById('d-front').src = c.front || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=333&color=fff`;
+            
+            const backImg = document.getElementById('d-back');
+            if(c.back) { backImg.src = c.back; backImg.style.display = 'block'; } 
+            else { backImg.style.display = 'none'; }
+
+            document.getElementById('detail-modal').style.display = 'block';
+            
+            try { JsBarcode("#d-barcode", c.number, { format: "CODE128", width: 2, height: 80, displayValue: true }); } 
+            catch(e) { console.log("Errore Barcode", e); }
+        }
+
+        function deleteCard() {
+            if(confirm("Vuoi eliminare questa carta?")) {
+                cards.splice(currentCardIndex, 1);
+                localStorage.setItem('myCardsData', JSON.stringify(cards));
+                document.getElementById('detail-modal').style.display = 'none';
+                updateUI();
+            }
+        }
+
+        // SALVATAGGIO CON TRY-CATCH PER PREVENIRE ERRORI DI QUOTA
+        function saveCard() {
+            const name = document.getElementById('in-name').value.trim();
+            const number = document.getElementById('in-num').value.trim();
+            const pF = document.getElementById('prev-f');
+            const pB = document.getElementById('prev-b');
+
+            if(!name || !number) { alert("Inserisci Nome e Codice!"); return; }
+
+            // Aggiungiamo temporaneamente la carta all'array
+            const newCard = {
+                name: name,
+                number: number,
+                front: pF.style.display === 'block' ? pF.src : null,
+                back: pB.style.display === 'block' ? pB.src : null
+            };
+            cards.push(newCard);
+            
+            try {
+                // Proviamo a salvare in memoria
+                localStorage.setItem('myCardsData', JSON.stringify(cards));
+                closeAddModal();
+                updateUI();
+            } catch (e) {
+                // Se la memoria è ancora piena, eliminiamo la carta dall'array e avvisiamo l'utente
+                cards.pop();
+                if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                    alert("⚠️ Memoria Piena! Hai salvato troppe carte. Elimina qualche vecchia carta per fare spazio.");
+                } else {
+                    alert("Errore durante il salvataggio.");
+                }
+            }
+        }
+
+        // COMPRESSIONE IMMAGINI (Novità per risolvere il problema della memoria)
+        function previewAndCompress(input, id) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const imgObj = new Image();
+                    imgObj.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 800; // Riduce la risoluzione a un max di 800px
+                        let width = imgObj.width;
+                        let height = imgObj.height;
+
+                        if (width > height) {
+                            if (width > MAX_SIZE) {
+                                height *= MAX_SIZE / width;
+                                width = MAX_SIZE;
+                            }
+                        } else {
+                            if (height > MAX_SIZE) {
+                                width *= MAX_SIZE / height;
+                                height = MAX_SIZE;
+                            }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(imgObj, 0, 0, width, height);
+                        
+                        // Comprime in formato JPEG al 70% di qualità per risparmiare moltissimo spazio
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                        
+                        const img = document.getElementById(id); 
+                        img.src = compressedDataUrl; 
+                        img.style.display = 'block'; 
+                    };
+                    imgObj.src = event.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // Scanner
+        function startScan() {
+            document.getElementById('reader-container').style.display = 'block';
+            if (!html5QrCode) { html5QrCode = new Html5Qrcode("reader"); }
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                { fps: 10, qrbox: { width: 250, height: 150 } }, 
+                (text) => { document.getElementById('in-num').value = text; stopScan(); }
+            ).catch(err => { alert("Consenti l'accesso alla fotocamera."); });
+        }
+
+        function stopScan() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => { document.getElementById('reader-container').style.display = 'none'; });
+            } else {
+                document.getElementById('reader-container').style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
